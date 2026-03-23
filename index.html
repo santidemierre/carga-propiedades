@@ -266,6 +266,8 @@
                 properties.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
                 allProperties = properties;
                 filterProperties();
+                renderStatistics(properties);
+                renderHistory(properties);
             }, (error) => {
                 console.error("Properties Listener Error:", error);
             });
@@ -317,6 +319,66 @@
             `).join('');
         }
 
+        function renderStatistics(properties) {
+            if (properties.length === 0) {
+                document.getElementById('totalProperties').textContent = '0';
+                document.getElementById('visitedCount').textContent = '0';
+                document.getElementById('notVisitedCount').textContent = '0';
+                document.getElementById('avgRating').textContent = '0.0';
+                document.getElementById('topBarrio').textContent = '-';
+                document.getElementById('topBarrioCount').textContent = '';
+                return;
+            }
+
+            const total = properties.length;
+            const visited = properties.filter(p => p.visitada).length;
+            const notVisited = total - visited;
+            const avgRating = (properties.reduce((sum, p) => sum + (p.rating || 0), 0) / total).toFixed(1);
+
+            const barrioCount = {};
+            properties.forEach(p => {
+                barrioCount[p.barrio] = (barrioCount[p.barrio] || 0) + 1;
+            });
+            const topBarrio = Object.entries(barrioCount).sort((a, b) => b[1] - a[1])[0];
+
+            document.getElementById('totalProperties').textContent = total;
+            document.getElementById('visitedCount').textContent = visited;
+            document.getElementById('notVisitedCount').textContent = notVisited;
+            document.getElementById('avgRating').textContent = avgRating;
+            document.getElementById('topBarrio').textContent = topBarrio ? topBarrio[0] : '-';
+            document.getElementById('topBarrioCount').textContent = topBarrio ? `${topBarrio[1]} propiedades` : '';
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            const date = new Date(timestamp.seconds * 1000);
+            return date.toLocaleDateString('es-AR') + ' ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function renderHistory(properties) {
+            const sorted = [...properties].sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            
+            document.getElementById('historyList').innerHTML = sorted.map(p => `
+                <div class="bg-white border border-gray-100 rounded-[2rem] p-6 shadow-sm hover:shadow-md transition-all">
+                    <div class="flex flex-col gap-3">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-black text-gray-900">${p.tipo}</h3>
+                                <p class="text-indigo-600 font-bold text-sm">${p.barrio}</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${p.encontradaPor === 'Juli' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}">
+                                ${p.encontradaPor}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 space-y-1 border-t border-gray-100 pt-3">
+                            <p><strong>📅 Agregada:</strong> ${formatDate(p.createdAt)}</p>
+                            <p><strong>✏️ Última edición:</strong> ${formatDate(p.updatedAt) || 'Nunca'}</p>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
         propertyForm.onsubmit = async (e) => {
             e.preventDefault();
             if (!auth.currentUser) return;
@@ -351,7 +413,7 @@
                 if (propertyId) {
                     // Update existing property
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'propiedades', propertyId);
-                    await updateDoc(docRef, newProp);
+                    await updateDoc(docRef, { ...newProp, updatedAt: serverTimestamp() });
                 } else {
                     // Add new property
                     newProp.visitada = false;
@@ -622,10 +684,89 @@
             </div>
         </section>
 
+        <!-- Tab: STATISTICS -->
+        <section id="view-statistics" class="view-section hidden opacity-0">
+            <div class="max-w-4xl mx-auto">
+                <div class="mb-12">
+                    <h2 class="text-4xl font-black text-gray-900 tracking-tight">Estadísticas</h2>
+                    <p class="text-gray-400 font-bold mt-2">Resumen de búsquedas</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Total Properties -->
+                    <div class="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-home text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-gray-400 font-black uppercase text-xs tracking-widest">Total de Propiedades</p>
+                                <p class="text-4xl font-black text-gray-900" id="totalProperties">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visited vs Not Visited -->
+                    <div class="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                        <p class="text-gray-400 font-black uppercase text-xs tracking-widest mb-6">Visitadas / Sin Visitar</p>
+                        <div class="flex gap-6">
+                            <div>
+                                <p class="text-green-600 font-black text-sm">Visitadas</p>
+                                <p class="text-3xl font-black text-green-600" id="visitedCount">0</p>
+                            </div>
+                            <div>
+                                <p class="text-amber-600 font-black text-sm">Sin Visitar</p>
+                                <p class="text-3xl font-black text-amber-600" id="notVisitedCount">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Average Rating -->
+                    <div class="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-star text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-gray-400 font-black uppercase text-xs tracking-widest">Rating Promedio</p>
+                                <p class="text-4xl font-black text-gray-900" id="avgRating">0.0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Most Searched Neighborhood -->
+                    <div class="bg-white border border-gray-100 rounded-[2.5rem] p-8 shadow-sm">
+                        <p class="text-gray-400 font-black uppercase text-xs tracking-widest mb-6">Barrio Más Buscado</p>
+                        <div class="flex items-center gap-4">
+                            <div class="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-map-location-dot text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-2xl font-black text-gray-900" id="topBarrio">-</p>
+                                <p class="text-gray-400 text-sm font-bold" id="topBarrioCount"></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab: HISTORY -->
+        <section id="view-history" class="view-section hidden opacity-0">
+            <div class="max-w-4xl mx-auto">
+                <div class="mb-12">
+                    <h2 class="text-4xl font-black text-gray-900 tracking-tight">Historial</h2>
+                    <p class="text-gray-400 font-bold mt-2">Cambios y fechas de cada propiedad</p>
+                </div>
+
+                <div id="historyList" class="space-y-4"></div>
+            </div>
+        </section>
+
     </main>
 
     <!-- Floating Bottom Navigation -->
-    <nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-6">
+    <nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-6">
         <div class="bg-white/95 backdrop-blur-2xl border border-gray-200 shadow-2xl rounded-[2.5rem] p-2 flex gap-2">
             <!-- Nav: List -->
             <button onclick="switchView('view-home')" data-view="view-home" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-[2rem] bg-indigo-600 text-white shadow-xl shadow-indigo-200 transition-all font-black group">
@@ -636,6 +777,16 @@
             <button onclick="switchView('view-config')" data-view="view-config" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-[2rem] bg-white text-gray-500 transition-all font-black group">
                 <i class="fa-solid fa-sliders text-lg"></i>
                 <span class="text-[9px] uppercase tracking-[0.2em]">Ajustes</span>
+            </button>
+            <!-- Nav: Statistics -->
+            <button onclick="switchView('view-statistics')" data-view="view-statistics" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-[2rem] bg-white text-gray-500 transition-all font-black group">
+                <i class="fa-solid fa-chart-simple text-lg"></i>
+                <span class="text-[9px] uppercase tracking-[0.2em]">Stats</span>
+            </button>
+            <!-- Nav: History -->
+            <button onclick="switchView('view-history')" data-view="view-history" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-[2rem] bg-white text-gray-500 transition-all font-black group">
+                <i class="fa-solid fa-clock text-lg"></i>
+                <span class="text-[9px] uppercase tracking-[0.2em]">Historial</span>
             </button>
         </div>
     </nav>
