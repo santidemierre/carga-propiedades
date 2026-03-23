@@ -399,6 +399,19 @@
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
         .view-section { transition: opacity 0.3s ease; }
         .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+
+        .add-config-button {
+            width: 64px !important;
+            height: 64px !important;
+            min-width: 64px !important;
+            min-height: 64px !important;
+            max-width: 64px !important;
+            max-height: 64px !important;
+            border-radius: 1rem !important;
+            font-size: 2rem !important;
+            line-height: 1 !important;
+            padding: 0 !important;
+        }
         
         /* Custom scrollbar for config lists */
         .config-list::-webkit-scrollbar { width: 4px; }
@@ -543,8 +556,8 @@
                         </div>
                         <div class="flex gap-3 mb-8">
                             <input type="text" id="input-tipos" placeholder="PH, Depto, Casa..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-amber-100 transition-all">
-                            <button onclick="addItem('tipos')" class="bg-gray-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
-                                <span class="text-2xl font-extrabold">+</span>
+                            <button onclick="addItem('tipos')" class="add-config-button bg-gray-900 text-white rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-3xl font-black">+</span>
                             </button>
                         </div>
                         <div id="listTipos" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
@@ -560,8 +573,8 @@
                         </div>
                         <div class="flex gap-3 mb-8">
                             <input type="text" id="input-barrios" placeholder="Colegiales, Núñez..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-indigo-100 transition-all">
-                            <button onclick="addItem('barrios')" class="bg-gray-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
-                                <span class="text-2xl font-extrabold">+</span>
+                            <button onclick="addItem('barrios')" class="add-config-button bg-gray-900 text-white rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-3xl font-black">+</span>
                             </button>
                         </div>
                         <div id="listBarrios" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
@@ -577,8 +590,8 @@
                         </div>
                         <div class="flex gap-3 mb-8">
                             <input type="text" id="input-referencias" placeholder="3 ambientes, Piso 5..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-green-100 transition-all">
-                            <button onclick="addItem('referencias')" class="bg-gray-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
-                                <span class="text-2xl font-extrabold">+</span>
+                            <button onclick="addItem('referencias')" class="add-config-button bg-gray-900 text-white rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-3xl font-black">+</span>
                             </button>
                         </div>
                         <div id="listReferencias" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
