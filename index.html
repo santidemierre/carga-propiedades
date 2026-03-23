@@ -249,7 +249,7 @@
                 return;
             }
             const filtered = allProperties.filter(p => {
-                const referencias = p.referencias || [];
+                const referencias = p.referencias || (p.referencia ? p.referencia.split(',').map(v => v.trim()) : []);
                 return selectedFilters.every(val => referencias.includes(val));
             });
             renderProperties(filtered);
@@ -326,30 +326,45 @@
             
             const propertyId = document.getElementById('propertyId').value;
             const selectedReferencias = Array.from(document.querySelectorAll('input[name="referencias"]:checked')).map(i => i.value);
+            const encontradaPor = document.querySelector('input[name="encontradaPor"]:checked');
+            const ratingValue = document.getElementById('rating').value;
+            
+            if (!encontradaPor) {
+                alert('Seleccioná quién encontró la propiedad.');
+                btn.disabled = false;
+                btn.innerHTML = 'Guardar en la Lista';
+                return;
+            }
+            
             const newProp = {
-                tipo: document.getElementById('tipo').value,
-                barrio: document.getElementById('barrio').value,
+                tipo: document.getElementById('tipo').value || 'Sin tipo',
+                barrio: document.getElementById('barrio').value || 'Sin barrio',
                 referencia: selectedReferencias.join(', '),
                 referencias: selectedReferencias,
                 url: document.getElementById('url').value,
-                encontradaPor: document.querySelector('input[name="encontradaPor"]:checked').value,
-                rating: parseInt(document.getElementById('rating').value),
-                visitada: propertyId ? undefined : false, // don't update visitada if editing
-                notas: document.getElementById('notas').value,
-                createdAt: propertyId ? undefined : serverTimestamp() // don't update createdAt
+                encontradaPor: encontradaPor.value,
+                rating: ratingValue ? parseInt(ratingValue) : 3,
+                notas: document.getElementById('notas').value
             };
 
             try {
                 if (propertyId) {
-                    // Update
+                    // Update existing property
                     const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'propiedades', propertyId);
                     await updateDoc(docRef, newProp);
                 } else {
-                    // Add
+                    // Add new property
+                    newProp.visitada = false;
+                    newProp.createdAt = serverTimestamp();
                     await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'propiedades'), newProp);
                 }
+
                 propertyForm.reset();
                 document.getElementById('propertyId').value = '';
+                document.querySelectorAll('input[name="referencias"]').forEach(cb => cb.checked = false);
+            } catch (error) {
+                console.error('Error guardando propiedad:', error);
+                alert('Error al guardar: ' + error.message);
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = 'Guardar en la Lista';
