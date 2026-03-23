@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuestra Próxima Casa - Juli & San</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://kit.fontawesome.com/d9660c0440.js" crossorigin="anonymous"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, doc, updateDoc, deleteDoc, serverTimestamp, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBc7ume9p6v1Oi-jIE5WnTcOECO36w0rOI",
+            authDomain: "cazador-de-prop.firebaseapp.com",
+            projectId: "cazador-de-prop",
+            storageBucket: "cazador-de-prop.firebasestorage.app",
+            messagingSenderId: "1064461109292",
+            appId: "1:1064461109292:web:7e001138b021f8b9176989"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'propiedades-juli-san-v2';
+
+        // DOM Elements
+        const propertyForm = document.getElementById('propertyForm');
+        const propertiesGrid = document.getElementById('propertiesGrid');
+        const emptyState = document.getElementById('emptyState');
+        const loadingState = document.getElementById('loadingState');
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const views = document.querySelectorAll('.view-section');
+
+        const tipoSelect = document.getElementById('tipo');
+        const barrioSelect = document.getElementById('barrio');
+        const referenciaSelect = document.getElementById('referencia');
+        const listTipos = document.getElementById('listTipos');
+        const listBarrios = document.getElementById('listBarrios');
+        const listReferencias = document.getElementById('listReferencias');
+
+        // --- GLOBAL EXPORTS (WINDOW) ---
+        
+        // Switch between tabs
+        window.switchView = (viewId) => {
+            views.forEach(v => {
+                v.classList.add('hidden', 'opacity-0');
+            });
+            const activeView = document.getElementById(viewId);
+            activeView.classList.remove('hidden');
+            setTimeout(() => activeView.classList.remove('opacity-0'), 10);
+            
+            navButtons.forEach(btn => {
+                const isSelected = btn.dataset.view === viewId;
+                if(isSelected) {
+                    btn.classList.add('bg-indigo-600', 'text-white', 'shadow-xl', 'shadow-indigo-200');
+                    btn.classList.remove('text-gray-500', 'bg-white');
+                } else {
+                    btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-xl', 'shadow-indigo-200');
+                    btn.classList.add('text-gray-500', 'bg-white');
+                }
+            });
+        };
+
+        // Add Config Item
+        window.addItem = async (collectionId) => {
+            if (!auth.currentUser) return;
+            const input = document.getElementById(`input-${collectionId}`);
+            const val = input.value.trim();
+            if (!val) return;
+
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'configuracion', collectionId);
+            try {
+                const docSnap = await getDoc(docRef);
+                let items = docSnap.exists() ? docSnap.data().items : [];
+                
+                if (!items.includes(val)) {
+                    items.push(val);
+                    await setDoc(docRef, { items });
+                }
+                input.value = '';
+            } catch (e) {
+                console.error("Error adding item:", e);
+            }
+        };
+
+        // Remove Config Item
+        window.removeItem = async (collectionId, val) => {
+            if (!auth.currentUser) return;
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'configuracion', collectionId);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    let items = docSnap.data().items.filter(i => i !== val);
+                    await setDoc(docRef, { items });
+                }
+            } catch (e) {
+                console.error("Error removing item:", e);
+            }
+        };
+
+        // Edit Config Item
+        window.editItem = async (collectionId, oldVal, newVal) => {
+            if (!auth.currentUser || !newVal || newVal.trim() === '' || newVal.trim() === oldVal) return;
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'configuracion', collectionId);
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    let items = docSnap.data().items;
+                    const index = items.indexOf(oldVal);
+                    if (index !== -1) {
+                        items[index] = newVal.trim();
+                        await setDoc(docRef, { items });
+                    }
+                }
+            } catch (e) {
+                console.error("Error editing item:", e);
+            }
+        };
+
+        // Toggle Visited status
+        window.toggleVisitado = async (id, currentState) => {
+            if (!auth.currentUser) return;
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'propiedades', id);
+            await updateDoc(docRef, { visitada: !currentState });
+        };
+
+        // Delete property
+        window.deleteProp = async (id) => {
+            if (!auth.currentUser) return;
+            if (confirm('¿Borrar propiedad?')) {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'propiedades', id));
+            }
+        };
+
+        // Edit property
+        window.editProp = async (id) => {
+            if (!auth.currentUser) return;
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'propiedades', id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const p = docSnap.data();
+                document.getElementById('tipo').value = p.tipo;
+                document.getElementById('barrio').value = p.barrio;
+                document.getElementById('referencia').value = p.referencia;
+                document.getElementById('url').value = p.url;
+                document.querySelector(`input[name="encontradaPor"][value="${p.encontradaPor}"]`).checked = true;
+                document.getElementById('rating').value = p.rating;
+                document.getElementById('notas').value = p.notas || '';
+                // Set a hidden id for update
+                document.getElementById('propertyId').value = id;
+                // Switch to home view
+                switchView('view-home');
+                // Scroll to form
+                document.getElementById('propertyForm').scrollIntoView({ behavior: 'smooth' });
+            }
+        };
+
+        // --- DATA MANAGEMENT ---
+
+        function listenToConfig() {
+            if (!auth.currentUser) return;
+            const configRef = collection(db, 'artifacts', appId, 'public', 'data', 'configuracion');
+            onSnapshot(configRef, (snapshot) => {
+                const config = { tipos: [], barrios: [], referencias: [] };
+                snapshot.forEach(doc => {
+                    if (doc.id === 'tipos') config.tipos = doc.data().items || [];
+                    if (doc.id === 'barrios') config.barrios = doc.data().items || [];
+                    if (doc.id === 'referencias') config.referencias = doc.data().items || [];
+                });
+                updateDropdowns(config);
+                renderConfigLists(config);
+            }, (error) => {
+                console.error("Config Listener Error:", error);
+            });
+        }
+
+        function updateDropdowns(config) {
+            tipoSelect.innerHTML = config.tipos.length > 0 
+                ? config.tipos.map(t => `<option value="${t}">${t}</option>`).join('') 
+                : '<option disabled selected>Agregá tipos en Config</option>';
+            barrioSelect.innerHTML = config.barrios.length > 0 
+                ? config.barrios.map(b => `<option value="${b}">${b}</option>`).join('') 
+                : '<option disabled selected>Agregá barrios en Config</option>';
+            referenciaSelect.innerHTML = config.referencias.length > 0 
+                ? config.referencias.map(r => `<option value="${r}">${r}</option>`).join('') 
+                : '<option disabled selected>Agregá referencias en Config</option>';
+        }
+
+        function renderConfigLists(config) {
+            listTipos.innerHTML = config.tipos.map(t => `
+                <div class="flex justify-between items-center bg-white border border-gray-100 p-3 rounded-2xl mb-2 shadow-sm">
+                    <span contenteditable onblur="editItem('tipos', '${t}', this.textContent.trim())" class="text-sm font-bold text-gray-700 flex-1">${t}</span>
+                    <button onclick="removeItem('tipos', '${t}')" class="text-red-400 hover:text-red-600 p-1 transition-colors ml-2">
+                        ✕
+                    </button>
+                </div>
+            `).join('');
+            listBarrios.innerHTML = config.barrios.map(b => `
+                <div class="flex justify-between items-center bg-white border border-gray-100 p-3 rounded-2xl mb-2 shadow-sm">
+                    <span contenteditable onblur="editItem('barrios', '${b}', this.textContent.trim())" class="text-sm font-bold text-gray-700 flex-1">${b}</span>
+                    <button onclick="removeItem('barrios', '${b}')" class="text-red-400 hover:text-red-600 p-1 transition-colors ml-2">
+                        ✕
+                    </button>
+                </div>
+            `).join('');
+            listReferencias.innerHTML = config.referencias.map(r => `
+                <div class="flex justify-between items-center bg-white border border-gray-100 p-3 rounded-2xl mb-2 shadow-sm">
+                    <span contenteditable onblur="editItem('referencias', '${r}', this.textContent.trim())" class="text-sm font-bold text-gray-700 flex-1">${r}</span>
+                    <button onclick="removeItem('referencias', '${r}')" class="text-red-400 hover:text-red-600 p-1 transition-colors ml-2">
+                        ✕
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function listenToProperties() {
+            if (!auth.currentUser) return;
+            const q = collection(db, 'artifacts', appId, 'public', 'data', 'propiedades');
+            onSnapshot(q, (snapshot) => {
+                const properties = [];
+                snapshot.forEach((doc) => {
+                    properties.push({ id: doc.id, ...doc.data() });
+                });
+                properties.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+                renderProperties(properties);
+            }, (error) => {
+                console.error("Properties Listener Error:", error);
+            });
+        }
+
+        function renderProperties(properties) {
+            if (properties.length === 0) {
+                emptyState.classList.remove('hidden');
+                propertiesGrid.innerHTML = '';
+                return;
+            }
+            emptyState.classList.add('hidden');
+            propertiesGrid.innerHTML = properties.map(p => `
+                <div class="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+                    <div class="p-6">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${p.encontradaPor === 'Juli' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}">
+                                ${p.encontradaPor}
+                            </span>
+                            <div class="flex gap-2">
+                                <button onclick="window.editProp('${p.id}')" class="w-8 h-8 rounded-full flex items-center justify-center bg-blue-100 text-blue-600">
+                                    <i class="fa-solid fa-edit text-xs"></i>
+                                </button>
+                                <button onclick="window.toggleVisitado('${p.id}', ${p.visitada})" class="w-8 h-8 rounded-full flex items-center justify-center ${p.visitada ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}">
+                                    <i class="fa-solid ${p.visitada ? 'fa-check' : 'fa-eye'}"></i>
+                                </button>
+                                <button onclick="window.deleteProp('${p.id}')" class="w-8 h-8 rounded-full bg-red-50 text-red-400 flex items-center justify-center">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <h3 class="text-xl font-black text-gray-800 leading-tight">${p.tipo}</h3>
+                        <p class="text-indigo-600 font-bold text-sm mb-1">${p.barrio}</p>
+                        <p class="text-gray-400 text-xs mb-4 italic">${p.referencia}</p>
+
+                        <div class="flex items-center gap-1 mb-5">
+                            ${Array(5).fill(0).map((_, i) => `<i class="fa-solid fa-star ${i < p.rating ? 'text-amber-400' : 'text-gray-100'} text-xs"></i>`).join('')}
+                        </div>
+
+                        ${p.notas ? `<div class="bg-gray-50 p-3 rounded-2xl mb-5 text-gray-600 text-[11px] italic leading-relaxed">"${p.notas}"</div>` : ''}
+
+                        <a href="${p.url}" target="_blank" class="flex items-center justify-center gap-2 w-full bg-gray-900 text-white py-3.5 rounded-2xl text-xs font-black hover:bg-indigo-600 transition-all active:scale-95 shadow-lg shadow-gray-200">
+                            Ver Publicación <i class="fa-solid fa-external-link text-[10px]"></i>
+                        </a>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        propertyForm.onsubmit = async (e) => {
+            e.preventDefault();
+            if (!auth.currentUser) return;
+            const btn = propertyForm.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i>';
+            
+            const propertyId = document.getElementById('propertyId').value;
+            const newProp = {
+                tipo: document.getElementById('tipo').value,
+                barrio: document.getElementById('barrio').value,
+                referencia: document.getElementById('referencia').value,
+                url: document.getElementById('url').value,
+                encontradaPor: document.querySelector('input[name="encontradaPor"]:checked').value,
+                rating: parseInt(document.getElementById('rating').value),
+                visitada: propertyId ? undefined : false, // don't update visitada if editing
+                notas: document.getElementById('notas').value,
+                createdAt: propertyId ? undefined : serverTimestamp() // don't update createdAt
+            };
+
+            try {
+                if (propertyId) {
+                    // Update
+                    const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'propiedades', propertyId);
+                    await updateDoc(docRef, newProp);
+                } else {
+                    // Add
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'propiedades'), newProp);
+                }
+                propertyForm.reset();
+                document.getElementById('propertyId').value = '';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Guardar en la Lista';
+            }
+        };
+
+        // --- AUTH & INITIALIZATION ---
+        const initAuth = async () => {
+            try {
+                // Ensure auth is initialized before listeners
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Auth Error:", error);
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                loadingState.classList.add('hidden');
+                listenToProperties();
+                listenToConfig();
+            }
+        });
+
+        // Run Init
+        initAuth();
+
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+        .view-section { transition: opacity 0.3s ease; }
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+        
+        /* Custom scrollbar for config lists */
+        .config-list::-webkit-scrollbar { width: 4px; }
+        .config-list::-webkit-scrollbar-track { background: transparent; }
+        .config-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body class="min-h-screen pb-36">
+
+    <!-- Loading Screen -->
+    <div id="loadingState" class="fixed inset-0 z-[100] bg-white flex items-center justify-center">
+        <div class="flex flex-col items-center gap-5">
+            <div class="w-14 h-14 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+            <p class="font-black text-indigo-600 text-sm tracking-widest uppercase animate-pulse">Buscando llaves...</p>
+        </div>
+    </div>
+
+    <!-- Sticky Header -->
+    <header class="glass sticky top-0 z-40 border-b border-gray-100 px-6 py-4">
+        <div class="max-w-5xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 transform -rotate-3">
+                    <i class="fa-solid fa-house-circle-check text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black leading-none tracking-tight">Cazadores</h1>
+                    <p class="text-[10px] font-extrabold text-indigo-500 tracking-[0.2em] uppercase mt-0.5">De Hogares</p>
+                </div>
+            </div>
+            <div class="bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+                <div class="flex -space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-purple-500 border-2 border-white flex items-center justify-center text-[10px] text-white font-bold">J</div>
+                    <div class="w-6 h-6 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center text-[10px] text-white font-bold">S</div>
+                </div>
+                <span class="text-[11px] font-bold text-gray-500 tracking-tight">Juli & San</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-6 py-8">
+        
+        <!-- Tab: HOME / LIST -->
+        <section id="view-home" class="view-section">
+            <!-- Form Card -->
+            <div class="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 p-8 mb-12 relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-40 h-40 bg-indigo-50/50 rounded-full -mr-20 -mt-20"></div>
+                
+                <h2 class="text-2xl font-black mb-10 flex items-center gap-3 relative z-10">
+                    <span class="bg-indigo-600 text-white w-9 h-9 rounded-2xl flex items-center justify-center text-sm shadow-lg shadow-indigo-100">
+                        <i class="fa-solid fa-plus"></i>
+                    </span>
+                    Nueva Propiedad
+                </h2>
+                
+                <form id="propertyForm" class="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
+                    <input type="hidden" id="propertyId">
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Categoría</label>
+                        <select id="tipo" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"></select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Barrio / Zona</label>
+                        <select id="barrio" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"></select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Referencia</label>
+                        <select id="referencia" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"></select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Link de la Publicación</label>
+                        <input type="url" id="url" placeholder="ZonaProp, MercadoLibre, ArgenProp..." required
+                            class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">¿Quién la encontró?</label>
+                        <div class="flex gap-3">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="encontradaPor" value="Juli" checked class="hidden peer">
+                                <div class="text-center py-4 rounded-2xl border-2 border-gray-100 peer-checked:border-indigo-600 peer-checked:bg-indigo-50 text-gray-400 peer-checked:text-indigo-600 font-black text-xs transition-all uppercase tracking-widest">Juli</div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="encontradaPor" value="San" class="hidden peer">
+                                <div class="text-center py-4 rounded-2xl border-2 border-gray-100 peer-checked:border-indigo-600 peer-checked:bg-indigo-50 text-gray-400 peer-checked:text-indigo-600 font-black text-xs transition-all uppercase tracking-widest">San</div>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Puntaje</label>
+                        <select id="rating" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-amber-500 focus:ring-4 focus:ring-amber-50/50 transition-all">
+                            <option value="5">⭐⭐⭐⭐⭐ Increíble</option>
+                            <option value="4">⭐⭐⭐⭐ Muy Buena</option>
+                            <option value="3" selected>⭐⭐⭐ Normal</option>
+                            <option value="2">⭐⭐ Meh...</option>
+                            <option value="1">⭐ Descarte</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Notas Rápidas</label>
+                        <input type="text" id="notas" placeholder="Ruidoso, tiene balcón..." class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all">
+                    </div>
+                    <div class="flex items-end md:col-span-1">
+                        <button type="submit" class="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 uppercase tracking-widest text-xs">
+                            Guardar en la Lista
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Empty State -->
+            <div id="emptyState" class="hidden text-center py-24 bg-white rounded-[3rem] border border-gray-100 shadow-inner">
+                <div class="bg-gray-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fa-solid fa-map-pin text-3xl text-gray-200"></i>
+                </div>
+                <p class="text-gray-400 font-black uppercase tracking-[0.2em] text-xs">No hay casas cargadas todavía</p>
+                <p class="text-gray-300 text-[11px] mt-2">¡Empezá agregando una arriba!</p>
+            </div>
+
+            <!-- List Grid -->
+            <div id="propertiesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+        </section>
+
+        <!-- Tab: CONFIG -->
+        <section id="view-config" class="view-section hidden opacity-0">
+            <div class="max-w-4xl mx-auto">
+                <div class="mb-12">
+                    <h2 class="text-4xl font-black text-gray-900 tracking-tight">Ajustes</h2>
+                    <p class="text-gray-400 font-bold mt-2">Personalizá las opciones de búsqueda</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+                    <!-- Categories -->
+                    <div class="bg-indigo-50/30 p-8 rounded-[2.5rem] border border-indigo-100/50">
+                        <div class="flex items-center gap-4 mb-8">
+                            <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-tags text-xl"></i>
+                            </div>
+                            <h3 class="font-black text-gray-800 uppercase tracking-widest text-xs">Categorías de Vivienda</h3>
+                        </div>
+                        <div class="flex gap-3 mb-8">
+                            <input type="text" id="input-tipos" placeholder="PH, Depto, Casa..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-amber-100 transition-all">
+                            <button onclick="addItem('tipos')" class="bg-gray-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-lg font-bold">+</span>
+                            </button>
+                        </div>
+                        <div id="listTipos" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
+                    </div>
+
+                    <!-- Neighborhoods -->
+                    <div class="bg-indigo-50/30 p-8 rounded-[2.5rem] border border-indigo-100/50">
+                        <div class="flex items-center gap-4 mb-8">
+                            <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-map-location-dot text-xl"></i>
+                            </div>
+                            <h3 class="font-black text-gray-800 uppercase tracking-widest text-xs">Barrios / Zonas</h3>
+                        </div>
+                        <div class="flex gap-3 mb-8">
+                            <input type="text" id="input-barrios" placeholder="Colegiales, Núñez..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-indigo-100 transition-all">
+                            <button onclick="addItem('barrios')" class="bg-gray-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-lg font-bold">+</span>
+                            </button>
+                        </div>
+                        <div id="listBarrios" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
+                    </div>
+
+                    <!-- Referencias -->
+                    <div class="bg-indigo-50/30 p-8 rounded-[2.5rem] border border-indigo-100/50">
+                        <div class="flex items-center gap-4 mb-8">
+                            <div class="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-tag text-xl"></i>
+                            </div>
+                            <h3 class="font-black text-gray-800 uppercase tracking-widest text-xs">Referencias</h3>
+                        </div>
+                        <div class="flex gap-3 mb-8">
+                            <input type="text" id="input-referencias" placeholder="3 ambientes, Piso 5..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-green-100 transition-all">
+                            <button onclick="addItem('referencias')" class="bg-gray-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-lg font-bold">+</span>
+                            </button>
+                        </div>
+                        <div id="listReferencias" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Floating Bottom Navigation -->
+    <nav class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-6">
+        <div class="bg-white/95 backdrop-blur-2xl border border-gray-200 shadow-2xl rounded-[2.5rem] p-2 flex gap-2">
+            <!-- Nav: List -->
+            <button onclick="switchView('view-home')" data-view="view-home" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-[2rem] bg-indigo-600 text-white shadow-xl shadow-indigo-200 transition-all font-black group">
+                <i class="fa-solid fa-list-ul text-lg"></i>
+                <span class="text-[9px] uppercase tracking-[0.2em]">Listado</span>
+            </button>
+            <!-- Nav: Config -->
+            <button onclick="switchView('view-config')" data-view="view-config" class="nav-btn flex-1 flex flex-col items-center justify-center gap-1.5 py-4 rounded-[2rem] bg-white text-gray-500 transition-all font-black group">
+                <i class="fa-solid fa-sliders text-lg"></i>
+                <span class="text-[9px] uppercase tracking-[0.2em]">Ajustes</span>
+            </button>
+        </div>
+    </nav>
+
+</body>
+</html>
