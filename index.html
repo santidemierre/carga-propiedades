@@ -36,10 +36,12 @@
 
         const tipoSelect = document.getElementById('tipo');
         const barrioSelect = document.getElementById('barrio');
-        const referenciaSelect = document.getElementById('referencia');
+        const referenceOptions = document.getElementById('referenceOptions');
+        const referenceFilter = document.getElementById('referenceFilter');
         const listTipos = document.getElementById('listTipos');
         const listBarrios = document.getElementById('listBarrios');
         const listReferencias = document.getElementById('listReferencias');
+        let allProperties = [];
 
         // --- GLOBAL EXPORTS (WINDOW) ---
         
@@ -144,11 +146,16 @@
                 const p = docSnap.data();
                 document.getElementById('tipo').value = p.tipo;
                 document.getElementById('barrio').value = p.barrio;
-                document.getElementById('referencia').value = p.referencia;
                 document.getElementById('url').value = p.url;
                 document.querySelector(`input[name="encontradaPor"][value="${p.encontradaPor}"]`).checked = true;
                 document.getElementById('rating').value = p.rating;
                 document.getElementById('notas').value = p.notas || '';
+
+                const selectedRefs = p.referencias && p.referencias.length > 0 ? p.referencias : (p.referencia ? p.referencia.split(',').map(v => v.trim()) : []);
+                document.querySelectorAll('input[name="referencias"]').forEach(cb => {
+                    cb.checked = selectedRefs.includes(cb.value);
+                });
+
                 // Set a hidden id for update
                 document.getElementById('propertyId').value = id;
                 // Switch to home view
@@ -184,9 +191,24 @@
             barrioSelect.innerHTML = config.barrios.length > 0 
                 ? config.barrios.map(b => `<option value="${b}">${b}</option>`).join('') 
                 : '<option disabled selected>Agregá barrios en Config</option>';
-            referenciaSelect.innerHTML = config.referencias.length > 0 
-                ? config.referencias.map(r => `<option value="${r}">${r}</option>`).join('') 
-                : '<option disabled selected>Agregá referencias en Config</option>';
+
+            referenceOptions.innerHTML = config.referencias.length > 0
+                ? config.referencias.map((r, i) => `
+                    <label class="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="referencias" value="${r}" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded" />
+                        ${r}
+                    </label>
+                `).join('')
+                : '<span class="text-gray-400 text-xs">Agregá referencias en Config</span>';
+
+            referenceFilter.innerHTML = config.referencias.length > 0
+                ? config.referencias.map((r, i) => `
+                    <label class="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="referenceFilter" value="${r}" class="form-checkbox h-4 w-4 text-indigo-600 border-gray-300 rounded" onchange="filterProperties()" />
+                        ${r}
+                    </label>
+                `).join('')
+                : '<span class="text-gray-400 text-xs">Agregá referencias en Config</span>';
         }
 
         function renderConfigLists(config) {
@@ -216,6 +238,23 @@
             `).join('');
         }
 
+        function getActiveReferenceFilters() {
+            return Array.from(document.querySelectorAll('input[name="referenceFilter"]:checked')).map(i => i.value);
+        }
+
+        function filterProperties() {
+            const selectedFilters = getActiveReferenceFilters();
+            if (selectedFilters.length === 0) {
+                renderProperties(allProperties);
+                return;
+            }
+            const filtered = allProperties.filter(p => {
+                const referencias = p.referencias || [];
+                return selectedFilters.every(val => referencias.includes(val));
+            });
+            renderProperties(filtered);
+        }
+
         function listenToProperties() {
             if (!auth.currentUser) return;
             const q = collection(db, 'artifacts', appId, 'public', 'data', 'propiedades');
@@ -225,7 +264,8 @@
                     properties.push({ id: doc.id, ...doc.data() });
                 });
                 properties.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-                renderProperties(properties);
+                allProperties = properties;
+                filterProperties();
             }, (error) => {
                 console.error("Properties Listener Error:", error);
             });
@@ -259,7 +299,9 @@
                         </div>
                         <h3 class="text-xl font-black text-gray-800 leading-tight">${p.tipo}</h3>
                         <p class="text-indigo-600 font-bold text-sm mb-1">${p.barrio}</p>
-                        <p class="text-gray-400 text-xs mb-4 italic">${p.referencia}</p>
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            ${(p.referencias && p.referencias.length > 0 ? p.referencias : (p.referencia ? [p.referencia] : [])).map(r => `<span class="px-2 py-1 text-xs bg-indigo-50 text-indigo-600 rounded-full font-bold">${r}</span>`).join('')}
+                        </div>
 
                         <div class="flex items-center gap-1 mb-5">
                             ${Array(5).fill(0).map((_, i) => `<i class="fa-solid fa-star ${i < p.rating ? 'text-amber-400' : 'text-gray-100'} text-xs"></i>`).join('')}
@@ -283,10 +325,12 @@
             btn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin"></i>';
             
             const propertyId = document.getElementById('propertyId').value;
+            const selectedReferencias = Array.from(document.querySelectorAll('input[name="referencias"]:checked')).map(i => i.value);
             const newProp = {
                 tipo: document.getElementById('tipo').value,
                 barrio: document.getElementById('barrio').value,
-                referencia: document.getElementById('referencia').value,
+                referencia: selectedReferencias.join(', '),
+                referencias: selectedReferencias,
                 url: document.getElementById('url').value,
                 encontradaPor: document.querySelector('input[name="encontradaPor"]:checked').value,
                 rating: parseInt(document.getElementById('rating').value),
@@ -394,6 +438,10 @@
                     Nueva Propiedad
                 </h2>
                 
+                <div class="mb-6">
+                    <h3 class="text-sm font-black text-gray-800 uppercase tracking-widest">Filtrar por Referencias</h3>
+                    <div id="referenceFilter" class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+                </div>
                 <form id="propertyForm" class="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
                     <input type="hidden" id="propertyId">
                     <div>
@@ -404,9 +452,9 @@
                         <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Barrio / Zona</label>
                         <select id="barrio" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"></select>
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Referencia</label>
-                        <select id="referencia" class="w-full px-5 py-4 rounded-2xl bg-gray-50 border-transparent outline-none font-bold text-gray-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"></select>
+                    <div class="md:col-span-3">
+                        <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Referencias (se pueden elegir varias)</label>
+                        <div id="referenceOptions" class="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-2 rounded-2xl bg-gray-50 border border-gray-100"></div>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2.5 ml-1">Link de la Publicación</label>
@@ -480,8 +528,8 @@
                         </div>
                         <div class="flex gap-3 mb-8">
                             <input type="text" id="input-tipos" placeholder="PH, Depto, Casa..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-amber-100 transition-all">
-                            <button onclick="addItem('tipos')" class="bg-gray-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
-                                <span class="text-lg font-bold">+</span>
+                            <button onclick="addItem('tipos')" class="bg-gray-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-2xl font-extrabold">+</span>
                             </button>
                         </div>
                         <div id="listTipos" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
@@ -497,8 +545,8 @@
                         </div>
                         <div class="flex gap-3 mb-8">
                             <input type="text" id="input-barrios" placeholder="Colegiales, Núñez..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-indigo-100 transition-all">
-                            <button onclick="addItem('barrios')" class="bg-gray-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
-                                <span class="text-lg font-bold">+</span>
+                            <button onclick="addItem('barrios')" class="bg-gray-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-2xl font-extrabold">+</span>
                             </button>
                         </div>
                         <div id="listBarrios" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
@@ -514,8 +562,8 @@
                         </div>
                         <div class="flex gap-3 mb-8">
                             <input type="text" id="input-referencias" placeholder="3 ambientes, Piso 5..." class="flex-1 px-5 py-4 rounded-2xl bg-white border-transparent outline-none font-bold text-sm shadow-sm focus:ring-4 focus:ring-green-100 transition-all">
-                            <button onclick="addItem('referencias')" class="bg-gray-900 text-white w-14 h-14 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
-                                <span class="text-lg font-bold">+</span>
+                            <button onclick="addItem('referencias')" class="bg-gray-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                                <span class="text-2xl font-extrabold">+</span>
                             </button>
                         </div>
                         <div id="listReferencias" class="space-y-3 max-h-72 overflow-y-auto pr-2 config-list"></div>
