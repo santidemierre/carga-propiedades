@@ -306,8 +306,10 @@
                         </div>
 
                         <div class="flex items-center gap-2 mb-2">
-                            <div class="flex items-center gap-1">
-                                ${Array(5).fill(0).map((_, i) => `<i class="fa-solid fa-star ${i < (p.rating || 0) ? 'text-amber-400' : 'text-gray-300'} text-sm"></i>`).join('')}
+                            <div class="flex items-center gap-1 text-sm">
+                                <span class="text-amber-500 font-black" style="letter-spacing: .1em;">
+                                    ${'★'.repeat(p.rating || 0)}${'☆'.repeat(5 - (p.rating || 0))}
+                                </span>
                             </div>
                             <span class="text-[11px] font-bold text-gray-500">Puntaje: ${p.rating || 0}/5</span>
                         </div>
@@ -374,8 +376,10 @@
                             </span>
                         </div>
                         <div class="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
-                            <div class="flex items-center gap-1">
-                                ${Array(5).fill(0).map((_, i) => `<i class="fa-solid fa-star ${i < (p.rating || 0) ? 'text-amber-400' : 'text-gray-300'} text-sm"></i>`).join('')}
+                            <div class="flex items-center gap-1 text-sm">
+                                <span class="text-amber-500 font-black" style="letter-spacing: .1em;">
+                                    ${'★'.repeat(p.rating || 0)}${'☆'.repeat(5 - (p.rating || 0))}
+                                </span>
                             </div>
                             <span class="text-gray-500">${p.rating || 0}/5</span>
                         </div>
